@@ -96,6 +96,36 @@ merged_df = merged_df.drop(
     ]
 )
 
+# Before grouping, let's print the sum of "Other" for each decile
+print("\nSum of 'Other' for each decile before grouping:")
+print(merged_df.groupby("parl25-imd-pop-decile")["Other"].sum())
+
+# Let's also print the unique parties included in "Other"
+other_parties_columns = [
+    party_mapping[party]
+    for party in other_parties
+    if party_mapping[party] in merged_df.columns
+]
+print("\nParties included in 'Other':")
+print(other_parties_columns)
+
+# Modify the "Other" calculation to include all non-main parties
+main_parties = [
+    "Conservative",
+    "Liberal Democrat",
+    "Labour",
+    "Reform UK",
+    "Green",
+    "SNP",
+    "Plaid Cymru",
+    "DUP",
+    "Sinn Fein",
+    "SDLP",
+    "UUP",
+    "Alliance",
+]
+merged_df["Other"] = 100 - merged_df[main_parties].sum(axis=1)
+
 # Define the desired order of parties
 party_order = [
     "Conservative",
@@ -127,6 +157,10 @@ grouped = grouped[["Decile"] + [col for col in party_order if col in grouped.col
 
 # Set "Decile" as the index again
 grouped = grouped.set_index("Decile")
+
+# After grouping, let's print the "Other" column
+print("\n'Other' column after grouping:")
+print(grouped["Other"])
 
 # Save the results
 output_path = "output/2024_percentages_by_decile.csv"

@@ -2,8 +2,8 @@ import pandas as pd
 import numpy as np
 
 # Read the CSV files
-df_2019 = pd.read_csv("output/2019_percentages_by_decile.csv")
-df_2024 = pd.read_csv("output/2024_percentages_by_decile.csv")
+df_2019 = pd.read_csv("output/2019_voteshare_by_decile.csv")
+df_2024 = pd.read_csv("output/2024_voteshare_by_decile.csv")
 
 # Rename columns for consistency
 df_2019 = df_2019.rename(columns={"pcon-imd-pop-decile": "Decile"})

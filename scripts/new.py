@@ -11,6 +11,8 @@ df_2024.columns = [" ".join(map(str, col)).strip() for col in df_2024.columns.va
 # Select vote columns (H:X)
 vote_columns = df_2024.iloc[:, 7:24]
 
+print(df_2024.columns)
+
 # Define party mapping (unchanged)
 party_mapping = OrderedDict(
     {

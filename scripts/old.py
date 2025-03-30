@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 
 # Load data
 df_2019 = pd.read_excel(
@@ -10,8 +11,6 @@ deprivation_df = pd.read_csv("data/old_parl_imd.csv")
 df_2019.columns = [
     f"{col[0]}_{col[1]}" if col[1] else col[0] for col in df_2019.columns
 ]
-
-print(df_2019.columns)
 
 # Define party columns
 party_columns = {
@@ -29,6 +28,10 @@ party_columns = {
     "Alliance": "Alliance_Votes",
 }
 
+# Find total votes column
+total_votes_col = next(col for col in df_2019.columns if "Total votes" in col)
+print(f"\nTotal votes column name: {total_votes_col}")
+
 # Merge data and process
 merged_df = pd.merge(
     df_2019,
@@ -41,10 +44,20 @@ merged_df["pcon-imd-pop-decile"] = (
     merged_df["pcon-imd-pop-decile"].fillna(-1).astype(int)
 )
 
+# Process total votes - ensure it's numeric
+merged_df["total_votes_numeric"] = pd.to_numeric(
+    merged_df[total_votes_col], errors="coerce"
+)
+print(
+    f"Number of valid total votes values: {merged_df['total_votes_numeric'].notna().sum()}"
+)
+
 # Calculate votes for all parties
 for party, votes_col in party_columns.items():
     if votes_col in merged_df.columns:
-        merged_df[f"{party}_votes"] = merged_df[votes_col].fillna(0)
+        merged_df[f"{party}_votes"] = pd.to_numeric(
+            merged_df[votes_col], errors="coerce"
+        ).fillna(0)
     else:
         print(f"Warning: {votes_col} not found in columns")
 
@@ -52,26 +65,49 @@ for party, votes_col in party_columns.items():
 party_votes = merged_df[[f"{party}_votes" for party in party_columns.keys()]].sum(
     axis=1
 )
-merged_df["Other_votes"] = merged_df["Other_Total votes"] - party_votes
+merged_df["Other_votes"] = merged_df["total_votes_numeric"] - party_votes
 
-# Group by Decile and calculate total votes and voteshare
+# Calculate vote shares
 party_order = list(party_columns.keys()) + ["Other"]
-grouped = merged_df.groupby("pcon-imd-pop-decile")
+for party in party_order:
+    merged_df[f"{party}_share"] = (
+        merged_df[f"{party}_votes"] / merged_df["total_votes_numeric"] * 100
+    )
 
-total_votes = grouped["Other_Total votes"].sum()
-party_votes = {party: grouped[f"{party}_votes"].sum() for party in party_order}
+# Group by deprivation decile and calculate weighted vote shares
+result_dict = {}
+for party in party_order:
+    # Use only valid data
+    valid_data = merged_df.dropna(
+        subset=["pcon-imd-pop-decile", f"{party}_share", "total_votes_numeric"]
+    )
 
-# Calculate voteshare
-voteshare = pd.DataFrame(
-    {party: votes / total_votes * 100 for party, votes in party_votes.items()}
-)
-voteshare["Decile"] = voteshare.index
+    # Print diagnostic info for one party
+    if party == "Labour":
+        print(
+            f"\nNumber of valid constituencies for Labour calculation: {len(valid_data)}"
+        )
+        print(f"Distribution of valid constituencies by decile:")
+        print(valid_data["pcon-imd-pop-decile"].value_counts().sort_index())
 
-# Reorder columns and remove -1 decile
-voteshare = voteshare[["Decile"] + party_order]
+    # Apply weighted average using total votes as weights
+    result = valid_data.groupby("pcon-imd-pop-decile").apply(
+        lambda group: np.average(
+            group[f"{party}_share"], weights=group["total_votes_numeric"]
+        )
+    )
+
+    result_dict[party] = result
+
+# Convert results to DataFrame
+voteshare = pd.DataFrame(result_dict)
+voteshare.index.name = "Decile"
+voteshare = voteshare.reset_index()
+
+# Remove -1 decile if present
 voteshare = voteshare[voteshare["Decile"] != -1]
 
 # Save results
-output_path = "output/2019_voteshare_by_decile.csv"
+output_path = "output/2019_voteshare_by_decile_weighted.csv"
 voteshare.to_csv(output_path, index=False)
-print(f"Saved 2019 voteshare by deprivation decile to {output_path}")
+print(f"\nSaved 2019 weighted voteshare by deprivation decile to {output_path}")
